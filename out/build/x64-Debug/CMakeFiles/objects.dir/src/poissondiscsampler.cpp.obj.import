@@ -1,0 +1,18 @@
+[remap]
+
+importer="wavefront_obj"
+type="Mesh"
+path="res://.import/poissondiscsampler.cpp.obj-83db44f0c591ddbe8fff7060a024ff35.mesh"
+
+[deps]
+
+files=[ "res://.import/poissondiscsampler.cpp.obj-83db44f0c591ddbe8fff7060a024ff35.mesh" ]
+
+source_file="res://src/lib/FantasyMapGenerator/out/build/x64-Debug/CMakeFiles/objects.dir/src/poissondiscsampler.cpp.obj"
+dest_files=[ "res://.import/poissondiscsampler.cpp.obj-83db44f0c591ddbe8fff7060a024ff35.mesh", "res://.import/poissondiscsampler.cpp.obj-83db44f0c591ddbe8fff7060a024ff35.mesh" ]
+
+[params]
+
+generate_tangents=true
+scale_mesh=Vector3( 1, 1, 1 )
+optimize_mesh=true

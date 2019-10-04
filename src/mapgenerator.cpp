@@ -1,4 +1,11 @@
 #include "mapgenerator.h"
+#include "cereal/cereal.hpp"
+#include "cereal/archives/binary.hpp"
+#include "cereal/archives/json.hpp"
+#include "cereal/types/vector.hpp"
+#include "cereal/types/string.hpp"
+#include "cereal/types/memory.hpp"
+#include "cereal/types/common.hpp"
 
 gen::MapGenerator::MapGenerator() : 
                                 _fontData(gen::resources::getFontDataResource()),
@@ -39,7 +46,9 @@ gen::MapGenerator::MapGenerator(Extents2d extents, double resolution) :
 }
 
 void gen::MapGenerator::initialize() {
-    _initializeVoronoiData();
+    if (_voronoi.vertices.size() == 0) {
+        _initializeVoronoiData();
+    }
     _initializeMapData();
     _isInitialized = true;
 }
@@ -79,7 +88,7 @@ void gen::MapGenerator::setSeaLevelToMedian() {
     _heightMap.setLevelToMedian();
 }
 
-void gen::MapGenerator::addHill(double px, double py, double r, double height) {
+void gen::MapGenerator::addHill(double px, double py, double r, double height, bool multiply = false) {
     if (!_isInitialized) {
         throw std::runtime_error("MapGenerator must be initialized.");
     }
@@ -102,12 +111,23 @@ void gen::MapGenerator::addHill(double px, double py, double r, double height) {
         if (dsq < rsq) {
             double kernel = 1.0 - coef1*dsq*dsq*dsq + coef2*dsq*dsq - coef3*dsq;
             double hval = _heightMap(i);
-            _heightMap.set(i, hval + height*kernel);
+            if (!multiply) {
+                _heightMap.set(i, hval + height*kernel);
+            } else {
+                _heightMap.set(i, hval * height*kernel);
+            }
+        } else {
+            double hval = _heightMap(i);
+            if (!multiply) {
+                _heightMap.set(i, hval + 0);
+            } else {
+                _heightMap.set(i, hval * 0);
+            }
         }
     }
 }
 
-void gen::MapGenerator::addCone(double px, double py, double radius, double height) {
+void gen::MapGenerator::addCone(double px, double py, double radius, double height, bool multiply = false) {
     if (!_isInitialized) {
         throw std::runtime_error("MapGenerator must be initialized.");
     }
@@ -127,13 +147,24 @@ void gen::MapGenerator::addCone(double px, double py, double radius, double heig
             double dist = sqrt(dsq);
             double kernel = 1.0 - dist * invradius;
             double hval = _heightMap(i);
-            _heightMap.set(i, hval + height*kernel);
+            if (!multiply) {
+                _heightMap.set(i, hval + height*kernel);
+            } else {
+                _heightMap.set(i, hval * height*kernel);
+            }
+        } else {
+            double hval = _heightMap(i);
+            if (!multiply) {
+                _heightMap.set(i, hval + 0);
+            } else {
+                _heightMap.set(i, hval * 0);
+            }
         }
     }
 }
 
 void gen::MapGenerator::addSlope(double px, double py, double dirx, double diry, 
-                                 double radius, double height) {
+                                 double radius, double height, bool multiply = false) {
     if (!_isInitialized) {
         throw std::runtime_error("MapGenerator must be initialized.");
     }
@@ -169,9 +200,150 @@ void gen::MapGenerator::addSlope(double px, double py, double dirx, double diry,
 
         double fieldval = min + (dist / radius)*(max - min);
         double hval = _heightMap(i);
-        _heightMap.set(i, hval + fieldval);
+        if (!multiply) {
+                _heightMap.set(i, hval + fieldval);
+            } else {
+                _heightMap.set(i, hval * fieldval);
+            }
     }
 }
+
+
+void gen::MapGenerator::addPit(double px, double py, double radius, double height, bool multiply = false) {
+    if (!_isInitialized) {
+        throw std::runtime_error("MapGenerator must be initialized.");
+    }
+    /*
+        Create a conal pit where height rises off linearly
+    */
+
+    double invradius = 1.0 / radius;
+    double rsq = radius * radius;
+    dcel::Point v;
+    for (unsigned int i = 0; i < _heightMap.size(); i++) {
+        v = _vertexMap.vertices[i].position;
+        double dx = v.x - px;
+        double dy = v.y - py;
+        double dsq = dx*dx + dy*dy;
+        if (dsq < rsq) {
+            double dist = sqrt(dsq);
+            double kernel = 1.0 - dist * invradius;
+            double hval = _heightMap(i);
+            if (!multiply) {
+                _heightMap.set(i, hval - height*kernel);
+            } else {
+                _heightMap.set(i, hval * -height*kernel);
+            }
+        }
+    }
+}
+
+void gen::MapGenerator::addDepression(double px, double py, double r, double height, bool multiply = false) {
+    if (!_isInitialized) {
+        throw std::runtime_error("MapGenerator must be initialized.");
+    }
+    /*
+        Create a rounded depression where height falls off smoothly
+    */
+
+    // coefficients for the Wyvill kernel function
+    double coef1 = (4.0 / 9.0)*(1.0 / (r*r*r*r*r*r));
+    double coef2 = (17.0 / 9.0)*(1.0 / (r*r*r*r));
+    double coef3 = (22.0 / 9.0)*(1.0 / (r*r));
+    double rsq = r*r;
+
+    dcel::Point v;
+    for (unsigned int i = 0; i < _heightMap.size(); i++) {
+        v = _vertexMap.vertices[i].position;
+        double dx = v.x - px;
+        double dy = v.y - py;
+        double dsq = dx*dx + dy*dy;
+        if (dsq < rsq) {
+            double kernel = 1.0 - coef1*dsq*dsq*dsq + coef2*dsq*dsq - coef3*dsq;
+            double hval = _heightMap(i);
+            if (!multiply) {
+                _heightMap.set(i, hval - height*kernel);
+            } else {
+                _heightMap.set(i, hval *    height*kernel);
+            }
+        }
+    }
+}
+
+void gen::MapGenerator::multiply(double min, double max, double amount) {
+    if (!_isInitialized) {
+        throw std::runtime_error("MapGenerator must be initialized.");
+    }
+    for (unsigned int i =0; i <_heightMap.size(); i++) {
+        double h = _heightMap(i);
+        if (h > min && h < max) {
+            _heightMap.set(i, h * amount);
+        }
+    }
+}
+
+void gen::MapGenerator::addNoise(double freq, double strength, bool multiply) {
+    if (!_isInitialized) {
+        throw std::runtime_error("MapGenerator must be initialized.");
+    }
+
+    FastNoise noise;
+    noise.SetNoiseType(FastNoise::Simplex);
+    noise.SetSeed(rand()%10000);
+    noise.SetFrequency(freq);
+    for (unsigned int i = 0; i < _heightMap.size(); i++) {
+        dcel::Point p = _vertexMap.vertices[i].position;
+        double h = _heightMap(i);
+        double n = noise.GetNoise(p.x, p.y);
+        if (!multiply) {
+            _heightMap.set(i, h + strength*n);
+        } else {
+            _heightMap.set(i, h * strength*n);
+        }
+    }
+}
+
+double gen::MapGenerator::randomDouble(double min, double max) {
+    return min + (double)rand() / ((double)RAND_MAX / (max - min));
+}
+
+void gen::MapGenerator::makeContinent() {
+    if (!_isInitialized) {
+        throw std::runtime_error("MapGenerator must be initialized.");
+    }
+
+    FastNoise noiseGen;
+    noiseGen.SetNoiseType(FastNoise::Simplex);
+    noiseGen.SetSeed(rand() % 1000000);
+    noiseGen.SetFrequency(randomDouble(.1, 1));
+
+    double minDist = randomDouble(1., 2.);
+    double scalar = randomDouble(1., 4.);
+
+    for (unsigned int i = 0; i <_heightMap.size(); i++) {
+        double h = _heightMap(i);
+        dcel::Point p = _vertexMap.vertices[i].position;
+
+        double dist = abs(_extents.minx - p.x);
+
+        if (abs(_extents.maxx - p.x) < dist) {
+            dist = abs(_extents.maxx - p.x);
+        }
+        if (abs(_extents.maxy - p.y) < dist) {
+            dist =abs(_extents.maxy - p.y);
+        }
+        if (abs(_extents.miny - p.y) < dist) {
+            dist = abs(_extents.miny - p.y);
+        }
+        double noise = scalar * noiseGen.GetNoise(p.x, p.y);
+        if (dist <= minDist + noise) {
+            _heightMap.set(i, h - (1/pow(minDist + noise, 2)));
+        } else {
+            _heightMap.set(i, h - (1/pow(dist,2)));
+        }
+    }
+}
+
 
 void gen::MapGenerator::erode()  {
     erode(_defaultErodeAmount);
@@ -182,9 +354,10 @@ void gen::MapGenerator::erode(double amount) {
         throw std::runtime_error("MapGenerator must be initialized.");
     }
 
-    NodeMap<double> erosionMap(&_vertexMap, 0.0);
+    std::shared_ptr<VertexMap> vmp = std::make_shared<VertexMap>(_vertexMap);
+    NodeMap<double> erosionMap(vmp, 0.0);
     _calculateErosionMap(erosionMap);
-
+    gen::config::print("Erosion Map Created...");
     for (unsigned int i = 0; i < _heightMap.size(); i++) {
         double currlevel = _heightMap(i);
         double newlevel = currlevel - amount * erosionMap(i);
@@ -192,6 +365,27 @@ void gen::MapGenerator::erode(double amount) {
     }
 
     _isHeightMapEroded = true;
+}
+
+void gen::MapGenerator::generateBiomes() {
+    if (!_isInitialized) {
+        throw std::runtime_error("MapGenerator must be initialized.");
+    }
+    std::shared_ptr<VertexMap> vmp = std::make_shared<VertexMap>(_vertexMap);
+    NodeMap<double> precipitationMap(vmp, 0.0);
+    _calculatePrecipitationMap(precipitationMap);
+     _precipitationMap = precipitationMap;
+     _isPrecipitationCalculated = true;
+
+    NodeMap<double> temperatureMap(vmp, 0.0);
+    _calculateTemperatureMap(temperatureMap);
+    _temperatureMap = temperatureMap;
+    _isTemperatureCalculated = true;
+
+    NodeMap<double> biomeMap(vmp);
+    _calculateBiomeMap(biomeMap);
+    _biomeMap = biomeMap;
+
 }
 
 void gen::MapGenerator::addCity(std::string cityName, std::string territoryName) {
@@ -237,64 +431,48 @@ void gen::MapGenerator::outputVoronoiDiagram(std::string filename) {
     if (!_isInitialized) {
         throw std::runtime_error("MapGenerator must be initialized.");
     }
-    using jsoncons::json;
 
-    std::vector<std::vector<double> > faceVertices;
-    faceVertices.reserve(_voronoi.faces.size());
-
-    for (unsigned int i = 0; i < _voronoi.faces.size(); i++) {
-        dcel::Face f = _voronoi.faces[i];
-
-        if (f.outerComponent.ref == -1) {
-            continue;
-        }
-
-        dcel::HalfEdge h = _voronoi.outerComponent(f);
-        dcel::Ref startRef = h.id;
-
-        std::vector<double> vertices;
-        dcel::Vertex v;
-        do {
-            v = _voronoi.origin(h);
-            vertices.push_back(v.position.x);
-            vertices.push_back(v.position.y);
-            h = _voronoi.next(h);
-        } while (h.id != startRef);
-        faceVertices.push_back(vertices);
+    // cereal version
+    std::ofstream file(filename, std::ios::binary);
+    {
+        cereal::BinaryOutputArchive oarchive(file);
+        dcel::DCEL voronoi = _voronoi;
+        oarchive(voronoi);
     }
-    
-    json output;
-    output["faces"] = faceVertices;
-    output["extents"] = _getExtentsJSON();
-
-    std::ofstream file(filename);
-    file << output;
-    file.close();
 }
 
 void gen::MapGenerator::outputHeightMap(std::string filename) {
     if (!_isInitialized) {
         throw std::runtime_error("MapGenerator must be initialized.");
     }
+    // Cereal version
+    std::ofstream file(filename, std::ios::binary);
+    {   
+        cereal::BinaryOutputArchive oarchive(file);
+        NodeMap<double> heightMap = _heightMap;
+        oarchive(_heightMap);
+    } // to ensure contents are flushed
+}
 
-    std::vector<double> facecolors = _computeFaceValues(_heightMap);
-    double min = facecolors[0];
-    double max = facecolors[0];
-    for (unsigned int i = 0; i < facecolors.size(); i++) {
-        min = fmin(min, facecolors[i]);
-        max = fmax(max, facecolors[i]);
+void gen::MapGenerator::outputInstructionFile(std::string filename) {
+    if (!_isInitialized) {
+        throw std::runtime_error("MapGenerator must be initialized.");
     }
-
-    for (unsigned int i = 0; i < facecolors.size(); i++) {
-        facecolors[i] = (facecolors[i] - min) / (max - min);
-    }
-
-    jsoncons::json output;
-    output["colors"] = facecolors;
-
+    // Cereal version
     std::ofstream file(filename);
-    file << output;
-    file.close();
+    {   
+        cereal::JSONOutputArchive oarchive(file);
+        std::vector<gen::MapInstruction> instructions = _instructions;
+        oarchive(CEREAL_NVP(instructions));
+    } // to ensure contents are flushed
+}
+
+void gen::MapGenerator::addInstruction(gen::MapInstruction instruction) {
+    if (!_isInitialized) {
+        throw std::runtime_error("MapGenerator must be initialized.");
+    }
+
+    _instructions.push_back(instruction);
 }
 
 std::vector<char> gen::MapGenerator::getDrawData() {
@@ -345,6 +523,9 @@ std::vector<char> gen::MapGenerator::getDrawData() {
         _getLabelDrawData(labelData);
     }
 
+    std::vector<jsoncons::json> faceVertices;
+    _getBiomeDrawData(faceVertices);
+
     jsoncons::json output;
     output["image_width"] = _imgwidth;
     output["image_height"] = _imgheight;
@@ -356,6 +537,7 @@ std::vector<char> gen::MapGenerator::getDrawData() {
     output["town"] = townData;
     output["territory"] = territoryData;
     output["label"] = labelData;
+    output["biomes"] = faceVertices;
 
     std::string strout = output.as<std::string>();
     std::vector<char> charvect(strout.begin(), strout.end());
@@ -368,12 +550,68 @@ Extents2d gen::MapGenerator::getExtents() {
     return _extents;
 }
 
+void gen::MapGenerator::readHeightMapFile(std::string filename) {
+    // Cereal version
+    {
+        std::ifstream is(filename, std::ios::binary);
+        gen::config::print("\tReading heightmap file...");
+        cereal::BinaryInputArchive iarchive(is);
+        gen::NodeMap<double> heightMap;
+        iarchive(heightMap);
+        _heightMap = heightMap;
+    }
+    gen::config::print("\tHeightMap with " + gen::config::toString(_heightMap.size())+ " nodes loaded...");
+}
+
+
+void gen::MapGenerator::readVoronoiFile(std::string filename) {
+    // Cereal version
+    {
+        std::ifstream is(filename, std::ios::binary);
+        gen::config::print("\tReading voronoi file...");
+        cereal::BinaryInputArchive iarchive(is);
+        dcel::DCEL voronoi;
+        iarchive(voronoi);
+
+        _voronoi = voronoi;
+    }
+}
+
+void gen::MapGenerator::readInstructionFile(std::string filename) {
+     if (!_isInitialized) {
+        throw std::runtime_error("MapGenerator must be initialized.");
+    }
+
+    {
+        std::ifstream is(filename);
+        gen::config::print("\tReading map instructions file...");
+        cereal::JSONInputArchive iarchive(is);
+        std::vector<gen::MapInstruction> instructions;
+        iarchive(cereal::make_nvp("instructions", instructions));
+        gen::config::print("\tInstructions size:" + gen::config::toString(instructions.size()));
+
+        _instructions = instructions; 
+    }
+}
+
+
 void gen::MapGenerator::setDrawScale(double scale) {
     if (scale > 0.0) {
         double origDrawScale = _drawScale;
         _drawScale = scale;
         _cityMarkerRadius *= (_drawScale / origDrawScale);
         _townMarkerRadius *= (_drawScale / origDrawScale);
+    }
+}
+void gen::MapGenerator::setMapGlobalPosition(double scale, double offset) {
+    if (scale > 0.1) {
+        _mapScale = scale;
+    }
+
+    if (scale + offset <= 1) {
+        _mapOffset = offset;
+    } else {
+        _mapOffset = 1. - _mapScale;
     }
 }
 
@@ -455,7 +693,7 @@ void gen::MapGenerator::_initializeVoronoiData() {
     Extents2d sampleExtents(_extents.minx - pad, _extents.miny - pad,
                             _extents.maxx + pad, _extents.maxy + pad);
 
-    gen::config::print("\tGenerating poisson disc samples...");
+    //gen::config::print("\tGenerating poisson disc samples...");
     StopWatch timer;
     timer.start();
     std::vector<dcel::Point> samples;
@@ -463,46 +701,48 @@ void gen::MapGenerator::_initializeVoronoiData() {
                                                   _resolution, 
                                                   _poissonSamplerKValue);
     timer.stop();
-    gen::config::print("\tFinished generating " + 
-                       gen::config::toString(samples.size()) + " poisson disc "
-                       "samples in " + gen::config::toString(timer.getTime()) + 
-                       " seconds.\n");
+    //gen::config::print("\tFinished generating " + 
+                       //gen::config::toString(samples.size()) + " poisson disc "
+                       //"samples in " + gen::config::toString(timer.getTime()) + 
+                       //" seconds.\n");
 
-    gen::config::print("\tComputing Delaunay triangulation of " + 
-                       gen::config::toString(samples.size()) + " points...");
+    //gen::config::print("\tComputing Delaunay triangulation of " + 
+                       //gen::config::toString(samples.size()) + " points...");
     timer.reset();
     timer.start();
     dcel::DCEL triangulation = Delaunay::triangulate(samples);
     timer.stop();
-    gen::config::print("\tFinished computing triangulation in " + 
-                       gen::config::toString(timer.getTime()) + " seconds.\n");
+    //gen::config::print("\tFinished computing triangulation in " + 
+                       //gen::config::toString(timer.getTime()) + " seconds.\n");
 
-    gen::config::print("\tComputing Voronoi diagram from delaunay triangulation...");
+    //gen::config::print("\tComputing Voronoi diagram from delaunay triangulation...");
     timer.reset();
     timer.start();
     _voronoi = Voronoi::delaunayToVoronoi(triangulation);
     timer.stop();
-    gen::config::print("\tFinished computing Voronoi diagram in " + 
-                       gen::config::toString(timer.getTime()) + " seconds.\n");
+    //gen::config::print("\tFinished computing Voronoi diagram in " + 
+                       //gen::config::toString(timer.getTime()) + " seconds.\n");
 }
 
 void gen::MapGenerator::_initializeMapData() {
-    gen::config::print("\tInitializing map data...");
+    //gen::config::print("\tInitializing map data...");
     StopWatch timer;
     timer.start();
     _vertexMap = VertexMap(&_voronoi, _extents);
-    _heightMap = NodeMap<double>(&_vertexMap, 0);
+    std::shared_ptr<VertexMap> vmp = std::make_shared<VertexMap>(_vertexMap);
+    _heightMap = NodeMap<double>(vmp, 0);
     _initializeNeighbourMap();
     _initializeFaceNeighbours();
     _initializeFaceVertices();
     _initializeFaceEdges();
     timer.stop();
-    gen::config::print("\tFinished initializing map data in " + 
-                       gen::config::toString(timer.getTime()) + " seconds.");
+    //gen::config::print("\tFinished initializing map data in " + 
+                       //gen::config::toString(timer.getTime()) + " seconds.");
 }
 
 void gen::MapGenerator::_initializeNeighbourMap() {
-    _neighbourMap = NodeMap<std::vector<int> >(&_vertexMap);
+    std::shared_ptr<VertexMap> vmp = std::make_shared<VertexMap>(_vertexMap);
+    _neighbourMap = NodeMap<std::vector<int> >(vmp);
     std::vector<int> indices;
     indices.reserve(3);
     for (unsigned int i = 0; i < _neighbourMap.size(); i++) {
@@ -678,13 +918,12 @@ bool gen::MapGenerator::_isContourEdge(dcel::HalfEdge &h,
 
 void gen::MapGenerator::_calculateErosionMap(NodeMap<double> &erosionMap) {
     _fillDepressions();
-
-    NodeMap<double> fluxMap(&_vertexMap, 0.0);
+    std::shared_ptr<VertexMap> vmp = std::make_shared<VertexMap>(_vertexMap);
+    NodeMap<double> fluxMap(vmp, 0.0);
     _calculateFluxMap(fluxMap);
 
-    NodeMap<double> slopeMap(&_vertexMap, 0.0);
+    NodeMap<double> slopeMap(vmp, 0.0);
     _calculateSlopeMap(slopeMap);
-
     for (unsigned int i = 0; i < erosionMap.size(); i++) {
         double flux = fluxMap(i);
         double slope = slopeMap(i);
@@ -697,8 +936,222 @@ void gen::MapGenerator::_calculateErosionMap(NodeMap<double> &erosionMap) {
     erosionMap.normalize();
 }
 
+void gen::MapGenerator::_calculatePrecipitationMap(NodeMap<double> &precipitationMap) {
+    _precipitationNoiseMap.SetNoiseType(FastNoise::Simplex);
+    _precipitationNoiseMap.SetSeed(rand()%1000);
+    _precipitationNoiseMap.SetFrequency(0.01);
+
+    for (unsigned int i = 0; i < precipitationMap.size(); i++) {
+        dcel::Point point = _vertexMap.vertices[i].position;
+        double precip = _precipitationNoiseMap.GetNoise(point.x, point.y) ;
+        precipitationMap.set(i, .33 * _calculateHeightPrecipitation(i) + .66 * precip);
+    }
+    
+}
+
+double gen::MapGenerator::_calculateHeightPrecipitation(int i) {
+    double height = _heightMap(i);
+
+    return 1.0-height*height;
+}
+
+void gen::MapGenerator::_calculateTemperatureMap(NodeMap<double> &temperatureMap) {  
+    _temperatureNoiseMap.SetNoiseType(FastNoise::Simplex);
+    _temperatureNoiseMap.SetSeed(rand() % 1000);
+    _temperatureNoiseMap.SetFrequency(.001 * floor((1. - _mapScale) * 10));
+
+    double max = _heightMap.getMax() * (rand() % 3 + 7) / 10.;
+    _calculateLatitudeTemperatures(temperatureMap);
+}
+
+
+double gen::MapGenerator::_calculateHeightTemperature(int i, double max) {
+    double height = _heightMap(i);
+
+    return 1. -  std::max(0., ((max-height) / max));
+}
+
+double gen::MapGenerator::_calculateLatitudeTemperature(int i) {
+    dcel::Point point = _vertexMap.vertices[i].position;
+
+    double invheight = 1.0 / (_extents.maxy - _extents.miny); 
+
+    double yLoc = (point.y - _extents.miny) * invheight;
+    
+    double invwidth = 1.0 / (_extents.maxx - _extents.minx); 
+
+    double xLoc = (point.x - _extents.minx) * invwidth;
+    return 1.0 - (abs(.5 - yLoc) / .5);
+}
+
+void gen::MapGenerator::_calculateLatitudeTemperatures(NodeMap<double> &temperatureMap) {
+    double invheight = 1.0 / (_extents.maxy - _extents.miny);
+    for (unsigned int i = 0; i < _voronoi.faces.size(); i++) {
+        dcel::Face f = _voronoi.faces[i];
+
+        if (f.outerComponent.ref == -1) {
+            continue;
+        }
+
+        if (!_isLandFace(i)) {
+            continue;
+        }
+        
+        dcel::HalfEdge h = _voronoi.outerComponent(f);
+        dcel::Ref startRef = h.id;
+
+        double p = 0.;
+        dcel::Vertex v;
+        bool outOfBoundsEdge = false;
+        double count = 0.;
+        do {
+            v = _voronoi.origin(h);
+            outOfBoundsEdge = !_isEdgeInMap(h);
+            p += ((v.position.y - _extents.miny) * invheight);
+            h = _voronoi.next(h);
+            count++;
+        } while (h.id != startRef && !outOfBoundsEdge);
+        if (outOfBoundsEdge) {
+            continue;
+        }
+        p /= count;
+
+        // Adjust the point to fit the scale and offset
+        p =(_mapScale * p)  + _mapOffset; // World Scale Point
+
+        double dist = abs(.5 - p);
+        double temperature = (1.0 - (dist/ .5));
+        temperature *= .5 * _calculateVertexNoise(i, _temperatureNoiseMap) + .5;
+        temperature -= _calculateHeightTemperature(i, 1.0);
+        temperatureMap.set(i, std::max(0., temperature));
+    }
+}
+
+
+double gen::MapGenerator::_calculateVertexNoise(int i, FastNoise &noiseMap) {
+    dcel::Vertex ver = _vertexMap.vertices[i];
+    return (noiseMap.GetNoise(ver.position.x, ver.position.y) + 1.0) / 2.0; // normalize
+}
+
+void gen::MapGenerator::_calculateBiomeMap(NodeMap<double> &biomeMap) {
+    if (!_isTemperatureCalculated || !_isPrecipitationCalculated) {
+        config::print("Temperature and Precipitation must be calculated");
+    } else { 
+        for (unsigned int i = 0; i < biomeMap.size(); i++) {
+            double temp = _temperatureMap(i);
+            double precip = _precipitationMap(i);
+            double b = 0.0;
+            b = _getLifeZone(temp, precip);
+
+            biomeMap.set(i, b);
+        }
+    }
+}
+
+double gen::MapGenerator::_getLifeZone(double temp, double precip) {
+    int i = int(floor(temp * 8.0));
+    int j = int(floor(precip * 8.0));
+    if (i < 2) { // Tundra
+        return 1.0;
+    } else if (i >=2 && i < 6 && j < 1) { // Grassland-Steppe
+        return 2.0;
+    } else if ((i >= 6 && j < 1) || (i >= 7 && j < 4)) { // Desert
+        return 3.0;
+    } else if ((i >= 2 && i < 7 && j >= 1 && j < 2) || (i == 7 && j >=1 && j <3 )) { // Woodland
+        return 4.0;
+    }  else if (i >= 2 && i < 4 && j >= 2) { // Boreal Forest
+        return 5.0;
+    } else if (i >= 4 && i < 6 && j >=2 && j <7) { // Seasonal Forest
+        return 6.0;
+    } else if ((i == 6 && j >=3 && j < 5) || (i == 7 && j >= 4 && j < 6)) { // Savannah
+        return 7.0;
+    } else { // Rainforest
+        return 8.0;
+    }
+
+}
+
+void gen::MapGenerator::_getBiomeDrawData(std::vector<jsoncons::json> &faceVertices) {
+    double invwidth = 1.0 / (_extents.maxx - _extents.minx);
+    double invheight = 1.0 / (_extents.maxy - _extents.miny);
+    for (unsigned int i = 0; i < _voronoi.faces.size(); i++) {
+        dcel::Face f = _voronoi.faces[i];
+
+        if (f.outerComponent.ref == -1) {
+            continue;
+        }
+
+        if (!_isLandFace(i)) {
+            continue;
+        }
+        
+
+        dcel::HalfEdge h = _voronoi.outerComponent(f);
+        dcel::Ref startRef = h.id;
+
+        std::vector<double> vertices;
+        dcel::Vertex v;
+        bool outOfBoundsEdge = false;
+        do {
+            v = _voronoi.origin(h);
+            outOfBoundsEdge = !_isEdgeInMap(h);
+            vertices.push_back((v.position.x - _extents.minx) * invwidth);
+            vertices.push_back((v.position.y - _extents.miny) * invheight);
+            h = _voronoi.next(h);
+        } while (h.id != startRef && !outOfBoundsEdge);
+        if (outOfBoundsEdge) {
+            continue;
+        }
+        double type = _biomeMap(i);
+        faceVertices.push_back(_getBiomeJSON(i, vertices));
+    }
+}
+
+jsoncons::json gen::MapGenerator::_getBiomeJSON(double i, std::vector<double> &vertices) {
+    jsoncons::json json;
+    
+    double type = _biomeMap(i);
+    std::string name = _toBiomeString(type);
+    std::vector<double> neighbors;
+    _biomeMap.getNeighbours(i, neighbors);
+
+    std::vector<std::string> neighborTypes;
+
+    for(unsigned int i =0; i < neighbors.size(); i++) {
+        neighborTypes.push_back(_toBiomeString(neighbors[i]));
+    }
+
+
+    json["name"] = name;
+    json["vertices"] = vertices;
+
+    return json;
+}
+
+std::string gen::MapGenerator::_toBiomeString(double v) {
+    if (v == 1.0) {
+        return "Tundra";
+    } else if (v == 2.0) {
+        return "Grassland";
+    } else if (v == 3.0) {
+        return "Desert";
+    } else if (v == 4.0) {
+        return "Steppe/Woodland";
+    } else if (v  == 5.0) {
+        return "Boreal Forest";
+    } else if (v == 6.0) {
+        return "Seasonal Forest";
+    } else if (v == 7.0) {
+        return "Savannah";
+    } else {        
+        return "Rainforest";
+    }
+}
+
 void gen::MapGenerator::_fillDepressions() {
-    NodeMap<double> finalHeightMap(&_vertexMap, _heightMap.max());
+    std::shared_ptr<VertexMap> vmp = std::make_shared<VertexMap>(_vertexMap);
+    double maxHeight = _heightMap.getMax();
+    NodeMap<double> finalHeightMap(vmp, maxHeight);
     dcel::Vertex v;
     for (unsigned int i = 0; i < _vertexMap.edge.size(); i++) {
         v = _vertexMap.edge[i];
@@ -765,7 +1218,8 @@ void gen::MapGenerator::_calculateFlowMap(NodeMap<int> &flowMap) {
 }
 
 void gen::MapGenerator::_calculateFluxMap(NodeMap<double> &fluxMap) {
-    NodeMap<int> flowMap(&_vertexMap, -1);
+    std::shared_ptr<VertexMap> vmp = std::make_shared<VertexMap>(_vertexMap);
+    NodeMap<int> flowMap(vmp, -1);
     _calculateFlowMap(flowMap);
 
     for (unsigned int i = 0; i < flowMap.size(); i++) {
@@ -789,7 +1243,7 @@ void gen::MapGenerator::_calculateFluxMap(NodeMap<double> &fluxMap) {
 }
 
 double gen::MapGenerator::_calculateFluxCap(NodeMap<double> &fluxMap) {
-    double max = fluxMap.max();
+    double max = fluxMap.getMax();
 
     int nbins = 1000;
     std::vector<int> bins(nbins, 0);
@@ -837,6 +1291,51 @@ double gen::MapGenerator::_calculateSlope(int i) {
     double slope = sqrt(nx*nx + ny*ny);
 
     return slope;
+}
+
+void gen::MapGenerator::performInstructions() {
+    gen::config::print("Performing instructions...");
+
+    for(unsigned int i = 0; i < _instructions.size(); i++) {
+        gen::MapGenerator::_performInstruction(_instructions[i]);
+    }
+}
+
+void gen::MapGenerator::_performInstruction(gen::MapInstruction& mapInstruction) {
+    if (mapInstruction.FnName == "AddHill") {
+        bool multiply = mapInstruction.Params[4] == 1.;
+        gen::MapGenerator::addHill(mapInstruction.Params[0], mapInstruction.Params[1], 
+                            mapInstruction.Params[2], mapInstruction.Params[3], multiply);
+    } else if (mapInstruction.FnName == "addCone") {
+        bool multiply = mapInstruction.Params[4] == 1.;
+        gen::MapGenerator::addCone(mapInstruction.Params[0], mapInstruction.Params[1], 
+                            mapInstruction.Params[2], mapInstruction.Params[3], multiply);
+    } else if (mapInstruction.FnName == "addDepression") {
+        bool multiply = mapInstruction.Params[4] == 1.;
+        gen::MapGenerator::addDepression(mapInstruction.Params[0], mapInstruction.Params[1], 
+                            mapInstruction.Params[2], mapInstruction.Params[3], multiply);
+    } else if (mapInstruction.FnName == "addPit") {
+        bool multiply = mapInstruction.Params[4] == 1.;
+        gen::MapGenerator::addPit(mapInstruction.Params[0], mapInstruction.Params[1], 
+                            mapInstruction.Params[2], mapInstruction.Params[3], multiply);
+    } else if (mapInstruction.FnName == "addSlope") {
+        bool multiply = mapInstruction.Params[6] == 1.;
+        gen::MapGenerator::addSlope(mapInstruction.Params[0], mapInstruction.Params[1], 
+                            mapInstruction.Params[2], mapInstruction.Params[3], mapInstruction.Params[4], 
+                            mapInstruction.Params[5], multiply);
+    } else if (mapInstruction.FnName == "addNoise") {
+        bool multiply = mapInstruction.Params[2] == 1.;
+        gen::MapGenerator::addNoise(mapInstruction.Params[0], mapInstruction.Params[1],  multiply);
+    } else if (mapInstruction.FnName == "makeContinent") {
+        gen::MapGenerator::makeContinent();
+    } else if (mapInstruction.FnName == "erode") {
+        if (mapInstruction.Params.size() > 0) {
+            gen::MapGenerator::erode(mapInstruction.Params[0]);
+        } else {
+            gen::MapGenerator::erode();
+        }
+        
+    }
 }
 
 void gen::MapGenerator::_getContourDrawData(std::vector<std::vector<double> > &data) {
@@ -1293,10 +1792,11 @@ void gen::MapGenerator::_getSlopeDrawData(std::vector<double> &data) {
 }
 
 void gen::MapGenerator::_getSlopeSegments(std::vector<Segment> &segments) {
-    NodeMap<double> slopeMap(&_vertexMap, 0.0);
+    std::shared_ptr<VertexMap> vmp = std::make_shared<VertexMap>(_vertexMap);
+    NodeMap<double> slopeMap(vmp, 0.0);
     _calculateHorizontalSlopeMap(slopeMap);
 
-    NodeMap<double> nearSlopeMap(&_vertexMap, 0.0);
+    NodeMap<double> nearSlopeMap(vmp, 0.0);
     _calculateVerticalSlopeMap(nearSlopeMap);
 
     std::vector<double> faceSlopes = _computeFaceValues(slopeMap);
@@ -1426,7 +1926,8 @@ void gen::MapGenerator::_getTownDrawData(std::vector<double> &data) {
 }
 
 gen::MapGenerator::CityLocation gen::MapGenerator::_getCityLocation() {
-    NodeMap<double> cityScores(&_vertexMap, 0.0);
+    std::shared_ptr<VertexMap> vmp = std::make_shared<VertexMap>(_vertexMap);
+    NodeMap<double> cityScores(vmp, 0.0);
     _getCityScores(cityScores);
 
     std::vector<double> faceScores = _computeFaceValues(cityScores);

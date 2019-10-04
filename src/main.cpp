@@ -5,10 +5,10 @@
 #include <sstream>
 #include <random>
 
-#include "mapgenerator.h"
 #include "render.h"
 #include "config.h"
 #include "stopwatch.h"
+#include "mapgenerator.h"
 
 double randomDouble(double min, double max) {
     return min + (double)rand() / ((double)RAND_MAX / (max - min));
@@ -104,50 +104,104 @@ std::vector<std::string> getLabelNames(int num) {
     return labelnames;
 }
 
+dcel::Point getEndFromVectors(dcel::Point start, dcel::Point dir, double dist) {
+    dcel::Point end;
+    end.x = dir.x / sqrt(dir.x*dir.x + dir.y*dir.y) * dist + start.x;
+    end.y = dir.y / sqrt(dir.x*dir.x + dir.y*dir.y) * dist + start.y;
+
+    return end;
+}
+
+
 void initializeHeightmap(gen::MapGenerator &map) {
+    // Region Map
     double pad = 5.0;
     Extents2d extents = map.getExtents();
-    Extents2d expandedExtents(extents.minx - pad, extents.miny - pad,
-                              extents.maxx + pad, extents.maxy + pad);
+    double ratio = (extents.maxx - extents.minx) / (extents.maxy - extents.miny);
+    Extents2d expandedExtents(extents.minx - pad, extents.miny - pad/ratio,
+                              extents.maxx + pad, extents.maxy + pad/ratio);
     
     int n = (int)randomDouble(100, 250);
     double minr = 1.0;
-    double maxr = 8.0;
+    double maxr = 4.0;
     for (int i = 0; i < n; i++) {
-        dcel::Point p = randomPoint(expandedExtents);
+        dcel::Point p;
+        do {
+            p = randomPoint(expandedExtents);
+        } while (p.x < extents.minx + pad/2. || p.x > extents.maxx - pad/2. || p.y < extents.miny + (pad/ratio) / 2. || p.y > extents.maxy - (pad/ratio)/2.);
         double r = randomDouble(minr, maxr);
         double strength = randomDouble(0.5, 1.5);
         if (randomDouble(0, 1) > 0.5) {
-            map.addHill(p.x, p.y, r, strength);
+            map.addHill(p.x, p.y, r, strength, false);
+            std::vector<double> params = {p.x, p.y, r, strength, 0.};
+            gen::MapInstruction instruction("addHill", params);
+            map.addInstruction(instruction);
         } else {
-            map.addCone(p.x, p.y, r, strength);
+            map.addCone(p.x, p.y, r, strength, false);
+            std::vector<double> params = {p.x, p.y, r, strength, 0.};
+            gen::MapInstruction instruction("addCone", params);
+            map.addInstruction(instruction);
         }
     }
 
-    if (randomDouble(0, 1) > 0.5) {
-        dcel::Point p = randomPoint(expandedExtents);
-        double r = randomDouble(6.0, 12.0);
+    std::vector<dcel::Point> continents;
+    bool tooClose = false;
+    double continentSpacing = randomDouble(3., 5.);
+    n = (int)randomDouble(0,2);
+    for (int i = 0; i < n; i++) {
+        dcel::Point p;
+        do {
+            p = randomPoint(expandedExtents);
+
+            for ( unsigned int j = 0; j < continents.size(); j++) {
+                dcel::Point c = continents[j];
+                double dist = sqrt(pow(c.x-p.x, 2) + pow(c.y-p.y, 2));
+                if (dist < continentSpacing) {
+                    tooClose = true;
+                }
+            }
+        } while ((p.x < extents.minx + pad/2. ||
+            p.x > extents.maxx - pad/2. || 
+            p.y < extents.miny + pad / 2. || 
+            p.y > extents.maxy - pad/2.) || tooClose);
+        continents.push_back(p);
+        double r = randomDouble(4.0, 8.0);
         double strength = randomDouble(1.0, 3.0);
-        map.addCone(p.x, p.y, r, strength);
+        map.addCone(p.x, p.y, r, strength, false);
+        std::vector<double> params = {p.x, p.y, r, strength, 0.};
+        gen::MapInstruction instruction("addCone", params);
+        map.addInstruction(instruction);
     }
 
     if (randomDouble(0, 1) > 0.1) {
         dcel::Point dir = randomDirection();
         dcel::Point lp = randomPoint(extents);
         double slopewidth = randomDouble(0.5, 5.0);
-        double strength = randomDouble(2.0, 3.0);
-        map.addSlope(lp.x, lp.y, dir.x, dir.y, slopewidth, strength);
+        double strength = randomDouble(1.0, 3.0);
+        map.addSlope(lp.x, lp.y, dir.x, dir.y, slopewidth, strength, false);
+        std::vector<double> params = {lp.x, lp.y, dir.x, dir.y, slopewidth, strength,  0.};
+        gen::MapInstruction instruction("addSlope", params);
+        map.addInstruction(instruction);
     }
+    double noise = randomDouble(0.5, 1.5);
+    double frequency = randomDouble(0.01, 0.1);
+    bool multiple = randomDouble(0,1) > .5;
+
+    map.addNoise(frequency, noise, false);
+    std::vector<double> params = {frequency, noise,  0.};
+    gen::MapInstruction instruction("addNoise", params);
+    map.addInstruction(instruction);
     
     if (randomDouble(0, 1) > 0.5) {
         map.normalize();
     } else {
         map.round();
     }
-
+    
     if (randomDouble(0, 1) > 0.5) {
         map.relax();
     }
+    
 }
 
 void erode(gen::MapGenerator &map, double amount, int iterations) {
@@ -164,7 +218,20 @@ void erode(gen::MapGenerator &map, double amount, int iterations) {
               gen::config::toString(timer.getTime()) + " seconds.";
         gen::config::print(msg);
     }
-    map.setSeaLevelToMedian();
+}
+
+void createBiomes(gen::MapGenerator &map) {
+    StopWatch timer;
+    std::string msg;
+   
+    timer.reset();
+    timer.start();
+    map.generateBiomes();
+    timer.stop();
+
+    msg = "\tCompleted biome generation in " +
+            gen::config::toString(timer.getTime()) + " seconds.";
+    gen::config::print(msg);
 }
 
 void addCities(gen::MapGenerator &map, int numCities, 
@@ -243,38 +310,85 @@ int main(int argc, char **argv) {
     if (!gen::config::enableTowns) { map.disableTowns(); }
     if (!gen::config::enableLabels) { map.disableLabels(); }
     if (!gen::config::enableAreaLabels) { map.disableAreaLabels(); }
+    map.setMapGlobalPosition(gen::config::mapScale, gen::config::mapOffset);
 
     gen::config::print("\nInitializing map generator...");
     StopWatch timer;
     timer.start();
+    if (gen::config::voronoiFile != "" ) {
+        map.readVoronoiFile(gen::config::voronoiFile);
+    } 
+
     map.initialize();
+        
     timer.stop();
     gen::config::print("Finished initializing map generator in " +
-                       gen::config::toString(timer.getTime()) + " seconds.\n");
-   
+                    gen::config::toString(timer.getTime()) + " seconds.\n");
+
+    if (gen::config::voronoiCreation) {
+        std::string outfile = gen::config::outfile;
+        std::string voronoifile = "voronoi." + outfile + ".bin";
+        map.outputVoronoiDiagram(voronoifile);
+    }
 
     gen::config::print("Initializing height map...");
     timer.reset();
     timer.start();
-    initializeHeightmap(map);
+    if (gen::config::heightMapFile != "" && gen::config::voronoiFile != "") {
+        map.readHeightMapFile(gen::config::heightMapFile);
+    } 
+
+    if (gen::config::randomGeneration) {
+        initializeHeightmap(map);
+    }
+
     timer.stop();
     gen::config::print("Finished initializing height map in " +
                        gen::config::toString(timer.getTime()) + " seconds.\n");
-  
-    int erosionSteps = gen::config::erosionIterations;
-    double erosionAmount = randomDouble(0.2, 0.35);
-    if (gen::config::erosionAmount >= 0.0) {
-        erosionAmount = gen::config::erosionAmount;
+
+
+    if (gen::config::instructionFile != "" && gen::config::voronoiFile != "") {
+        map.readInstructionFile(gen::config::instructionFile);
+        map.performInstructions();
+    } 
+
+    if (gen::config::randomGeneration && gen::config::instructionFile == "") {
+        int erosionSteps = gen::config::erosionIterations;
+        double erosionAmount = randomDouble(0.2, 0.35);
+        if (gen::config::erosionAmount >= 0.0) {
+            erosionAmount = gen::config::erosionAmount;
+        }
+        gen::config::print("Eroding height map by " +
+                        gen::config::toString(erosionAmount) + " over " + 
+                        gen::config::toString(erosionSteps) + " iterations...");
+        timer.reset();
+        timer.start();
+        erode(map, erosionAmount, erosionSteps);
+        timer.stop();
+        gen::config::print("Finished eroding height map in " +
+                        gen::config::toString(timer.getTime()) + " seconds.\n");
+        
+        map.setSeaLevelToMedian();
+
+        map.makeContinent();
+        std::vector<double> params;;
+        gen::MapInstruction instruction("makeContinent", params);
+        map.addInstruction(instruction);
     }
-    gen::config::print("Eroding height map by " +
-                       gen::config::toString(erosionAmount) + " over " + 
-                       gen::config::toString(erosionSteps) + " iterations...");
-    timer.reset();
-    timer.start();
-    erode(map, erosionAmount, erosionSteps);
-    timer.stop();
-    gen::config::print("Finished eroding height map in " +
-                       gen::config::toString(timer.getTime()) + " seconds.\n");
+
+    if (gen::config::heightmapCreation) {
+        std::string outfile = gen::config::outfile;
+        std::string heightmapfile = "heightmap." + outfile + ".bin";
+        map.outputHeightMap(heightmapfile);
+    }
+
+    if (gen::config::instructionCreation) {
+        std::string outfile = gen::config::outfile;
+        std::string instructionfile = "instructions." + outfile + ".json";
+        map.outputInstructionFile(instructionfile);
+    }
+
+    createBiomes(map);
 
     int numCities = (int)randomDouble(3, 7);
     int numTowns = (int)randomDouble(8, 25);

@@ -1,0 +1,68 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.8.9"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"name" : "Release",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "map_generation",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "map_generation::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-map_generation-Release-d0b4dca7a02dba1f8768.json",
+					"name" : "map_generation",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "objects::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-objects-Release-e49272104109fb34372f.json",
+					"name" : "objects",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "D:/Encounter/MapGen/src/lib/FantasyMapGenerator/build/x64-Test",
+		"source" : "D:/Encounter/MapGen/src/lib/FantasyMapGenerator"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 0
+	}
+}

@@ -1,0 +1,18 @@
+[remap]
+
+importer="wavefront_obj"
+type="Mesh"
+path="res://.import/argtable3.c.obj-61733b54458cd81961f4064b0cf624ba.mesh"
+
+[deps]
+
+files=[ "res://.import/argtable3.c.obj-61733b54458cd81961f4064b0cf624ba.mesh" ]
+
+source_file="res://src/lib/FantasyMapGenerator/out/build/x64-Debug/CMakeFiles/objects.dir/src/argtable3/argtable3.c.obj"
+dest_files=[ "res://.import/argtable3.c.obj-61733b54458cd81961f4064b0cf624ba.mesh", "res://.import/argtable3.c.obj-61733b54458cd81961f4064b0cf624ba.mesh" ]
+
+[params]
+
+generate_tangents=true
+scale_mesh=Vector3( 1, 1, 1 )
+optimize_mesh=true

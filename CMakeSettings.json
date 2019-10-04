@@ -1,0 +1,16 @@
+﻿{
+  "configurations": [
+    {
+      "name": "x64-Test",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "buildRoot": "${projectDir}\\build\\${name}",
+      "installRoot": "D:/Encounter/MapGen/src/lib/FantasyMapGenerator/out/install/x64-Test",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "-v",
+      "ctestCommandArgs": "",
+      "variables": []
+    }
+  ]
+}

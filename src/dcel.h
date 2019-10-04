@@ -8,15 +8,22 @@
 #include <stdexcept>
 #include <exception>
 
+#include "cereal/cereal.hpp"
+
 namespace dcel {
 
 class Point {
 public:
 	Point() {}
 	Point(double px, double py) : x(px), y(py) {}
-
+	
 	double x = 0.0;
 	double y = 0.0;
+
+	template <class Archive>
+	inline void serialize(Archive & archive) {
+		archive(x, y);
+	}
 };
 
 class Ref {
@@ -33,6 +40,11 @@ public:
 	}
 
 	int ref = -1;
+
+	template <class Archive>
+	inline void serialize(Archive & archive) {
+		archive(ref);
+	}
 };
 
 class Face;
@@ -46,6 +58,11 @@ public:
 	Ref next;
 	Ref prev;
 	Ref id;
+
+	template <class Archive>
+	inline void serialize(Archive & archive) {
+		archive(origin, twin, incidentFace, next, prev, id);
+	}
 };
 
 class Face {
@@ -55,6 +72,11 @@ public:
 	Ref outerComponent;
 	std::vector<Ref> innerComponents;
 	Ref id;
+
+	template <class Archive>
+	inline void serialize(Archive & archive) {
+		archive(outerComponent, innerComponents, id);
+	}
 };
 
 class Vertex {
@@ -65,6 +87,10 @@ public:
 	Point position;
 	Ref incidentEdge;
 	Ref id;
+	template <class Archive>
+	inline void serialize(Archive & archive) {
+		archive(incidentEdge, position, id);
+	}
 };
 
 class DCEL {
@@ -247,6 +273,11 @@ public:
 	std::vector<Vertex> vertices;
 	std::vector<HalfEdge> edges;
 	std::vector<Face> faces;
+
+	template <class Archive>
+	inline void serialize(Archive & archive) {
+		archive(vertices, edges, faces);
+	}
 };
 
 }

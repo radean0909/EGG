@@ -7,6 +7,9 @@ unsigned int seed = 0;
 double resolution = 0.08;
 std::string outfileExt = ".png";
 std::string outfile = "output" + outfileExt;
+std::string voronoiFile = "";
+std::string heightMapFile = "";
+std::string instructionFile = "";
 double erosionAmount = -1.0;
 int erosionIterations = 3;
 int numCities = -1;
@@ -15,6 +18,8 @@ int imageWidth = 1920;
 int imageHeight = 1080;
 double defaultExtentsHeight = 20.0;
 double drawScale = 1.0;
+double mapScale = .2;
+double mapOffset = .25;
 bool enableSlopes = true;
 bool enableRivers = true;
 bool enableContour = true;
@@ -24,6 +29,10 @@ bool enableTowns = true;
 bool enableLabels = true;
 bool enableAreaLabels = true;
 bool verbose = false;
+bool voronoiCreation = false;
+bool heightmapCreation = false;
+bool instructionCreation = false;
+bool randomGeneration = false;
 
 void print(std::string msg) {
     if (gen::config::verbose) {
@@ -40,12 +49,21 @@ bool parseOptions(int argc, char **argv) {
         opts.resolution   = arg_dbln("r", "resolution", "<float>", 0, 1, "level of map detail"),
         opts.outfile      = arg_filen("o", "output", "filename", 0, 1, "output file"),
         opts.output       = arg_filen(NULL, NULL, "<file>", 0, 1, "output file"),
+        opts.instructionfile = arg_filen(NULL, "instruction-input", "<file>", 0, 1, "specifies a map instruction jsom file to generate map alterations"),
+        opts.voronoifile = arg_filen(NULL, "voronoi-input", "<file>", 0, 1, "specifies a voronoi input file to generate the map from" ),
+        opts.heightmapfile = arg_filen(NULL, "heightmap-input", "<file>", 0, 1, "specifies a heightmap input to generate the map from (requires voronoi input as well)"),
+        opts.voronoicreation = arg_litn(NULL, "create-voronoi", 0, 1, "enable creation of voronoi input file"),
+        opts.heightmapcreation = arg_litn(NULL, "create-heightmap", 0, 1, "enable creation of heightmap input file"),
+        opts.instructioncreation = arg_litn(NULL, "create-instruction", 0, 1, "enable creation of map creation instructions when generating map"),
         opts.eroamount    = arg_dbln("e", "erosion-amount", "<float>", 0, 1, "erosion amount"),
         opts.erosteps     = arg_intn(NULL, "erosion-steps", "<int>", 0, 1, "number of erosion iterations"),
         opts.ncities      = arg_intn("c", "cities", "<int>", 0, 1, "number of generated cities"),
         opts.ntowns       = arg_intn("t", "towns", "<int>", 0, 1, "number of generated towns"),
         opts.size         = arg_strn(NULL, "size", "<widthpx:heightpx>", 0, 1, "set output image size"),
         opts.drawscale    = arg_dbln(NULL, "draw-scale", "<float>", 0, 1, "set scale of drawn lines/points"),
+        opts.mapscale     = arg_dbln(NULL, "map-scale", "<float>", .1, 1, "set the global scale for the map region"),
+        opts.mapoffset    = arg_dbln(NULL, "map-offset", "<float>", 0, 1, "set the offset from the north pole to start the map"),
+        opts.generaterandom = arg_litn(NULL, "random-generation", 0, 1, "enable random map generation"),
         opts.noslopes     = arg_litn(NULL, "no-slopes", 0, 1, "disable slope drawing"),
         opts.norivers     = arg_litn(NULL, "no-rivers", 0, 1, "disable river drawing"),
         opts.nocontour    = arg_litn(NULL, "no-contour", 0, 1, "disable contour drawing"),
@@ -124,12 +142,21 @@ bool _setOptions(OptionArgs opts) {
     if (!_setSeed(opts.timeseed, opts.seed)) { return false; }
     if (!_setResolution(opts.resolution)) { return false; }
     if (!_setOutputFile(opts.outfile, opts.output)) { return false; }
+    if (!_enableVoronoiCreation(opts.voronoicreation)) { return false; }
+    if (!_enableHeightmapCreation(opts.heightmapcreation)) { return false; }
+    if (!_enableInstructionCreation(opts.instructioncreation)) { return false; }
+    if (!_setVoronoiInput(opts.voronoifile)) { return false; }
+    if (!_setHeightmapInput(opts.heightmapfile)) { return false; }
+    if (!_setInstructionInput(opts.instructionfile)) { return false; }
     if (!_setErosionAmount(opts.eroamount)) { return false; }
     if (!_setErosionIterations(opts.erosteps)) { return false; }
     if (!_setNumCities(opts.ncities)) { return false; }
     if (!_setNumTowns(opts.ntowns)) { return false; }
     if (!_setImageSize(opts.size)) { return false; }
     if (!_setDrawScale(opts.drawscale)) { return false; }
+    if (!_setMapScale(opts.mapscale)) { return false; }
+    if (!_setMapOffset(opts.mapoffset)) { return false; }
+    if (!_enableRandomGeneration(opts.generaterandom)) { return false; }
     if (!_disableSlopes(opts.noslopes)) { return false; }
     if (!_disableRivers(opts.norivers)) { return false; }
     if (!_disableContour(opts.nocontour)) { return false; }
@@ -178,6 +205,54 @@ bool _setOutputFile(arg_file *outfile1, arg_file *outfile2) {
     } else if (outfile2->count > 0) {
         gen::config::outfile = outfile2->filename[0];
         gen::config::outfileExt = outfile2->extension[0];
+    }
+
+    return true;
+}
+
+bool _setVoronoiInput(arg_file *voronoifile) {
+    if (voronoifile->count > 0) {
+        gen::config::voronoiFile = voronoifile->filename[0];
+    }
+
+    return true;
+}
+
+bool _setHeightmapInput(arg_file *heightmapfile) {
+    if (heightmapfile->count > 0) {
+        gen::config::heightMapFile = heightmapfile->filename[0];
+    }
+
+    return true;
+}
+
+bool _setInstructionInput(arg_file *instructionfile) {
+    if (instructionfile->count > 0) {
+        gen::config::instructionFile = instructionfile->filename[0];
+    }
+
+    return true;
+}
+
+bool _enableHeightmapCreation(arg_lit *enableheightmapcreation) {
+    if (enableheightmapcreation->count > 0) {
+        gen::config::heightmapCreation = true;
+    }
+
+    return true;
+}
+
+bool _enableVoronoiCreation(arg_lit *enablevoronoicreation) {
+    if (enablevoronoicreation->count > 0) {
+        gen::config::voronoiCreation = true;
+    }
+
+    return true;
+}
+
+bool _enableInstructionCreation(arg_lit *enableinstructioncreation) {
+    if (enableinstructioncreation->count > 0) {
+        gen::config::instructionCreation = true;
     }
 
     return true;
@@ -309,6 +384,53 @@ bool _setDrawScale(arg_dbl *drawscale) {
     }
 
     gen::config::drawScale = s;
+
+    return true;
+}
+
+bool _setMapScale(arg_dbl *mapscale) {
+    if (mapscale->count == 0) {
+        return true;
+    }
+
+    double s = mapscale->dval[0];
+    if (s <= .1) {
+        std::cout << "error: map scale must be greater than .1" << std::endl; 
+        std::cout << "map scale: " << s << std::endl;
+        return false;
+    }
+
+    gen::config::mapScale = s;
+
+    return true;
+    
+}
+
+bool _setMapOffset(arg_dbl *mapoffset) {
+    if (mapoffset->count == 0) {
+        if (gen::config::mapScale + gen::config::mapOffset > 1) {
+            gen::config::mapOffset = 1 - gen::config::mapScale;
+            std::cout << "warning: map offset reset due to map scale" << std::endl; 
+            std::cout << "map offset: " << gen::config::mapOffset << std::endl;
+        }
+        return true;
+    }
+
+    double o = mapoffset->dval[0];
+    if (gen::config::mapScale + o > 1) {
+        std::cout << "error: map offset + map scale must be less than 1" << std::endl; 
+        std::cout << "map offset: " << o << " , map scale: " << gen::config::mapScale << std::endl;
+        return false;
+    }
+
+    gen::config::mapOffset = o;
+    return true;
+}
+
+bool _enableRandomGeneration(arg_lit *generaterandom) {
+    if (generaterandom->count > 0) {
+        gen::config::randomGeneration = true;
+    }
 
     return true;
 }

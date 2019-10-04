@@ -1,0 +1,18 @@
+[remap]
+
+importer="wavefront_obj"
+type="Mesh"
+path="res://.import/render.cpp.obj-bd87666d9c04b4cdf58f9bcb47522f9b.mesh"
+
+[deps]
+
+files=[ "res://.import/render.cpp.obj-bd87666d9c04b4cdf58f9bcb47522f9b.mesh" ]
+
+source_file="res://src/lib/FantasyMapGenerator/out/build/x64-Debug/CMakeFiles/objects.dir/src/render.cpp.obj"
+dest_files=[ "res://.import/render.cpp.obj-bd87666d9c04b4cdf58f9bcb47522f9b.mesh", "res://.import/render.cpp.obj-bd87666d9c04b4cdf58f9bcb47522f9b.mesh" ]
+
+[params]
+
+generate_tangents=true
+scale_mesh=Vector3( 1, 1, 1 )
+optimize_mesh=true

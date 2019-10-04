@@ -8,7 +8,8 @@
 #include "extents2d.h"
 #include "dcel.h"
 
-#include "jsoncons/json.hpp"
+#include "cereal/cereal.hpp"
+#include "cereal/types/common.hpp"
 
 namespace gen {
 
@@ -34,6 +35,11 @@ public:
     std::vector<dcel::Vertex> vertices;
     std::vector<dcel::Vertex> edge;
     std::vector<dcel::Vertex> interior;
+
+    template <class Archive>
+	inline void serialize(Archive & archive) {
+		archive(vertices, edge, interior, _vertexIdToMapIndex, _vertexTypes);
+	}
 
 private:
 	bool _isBoundaryVertex(dcel::Vertex &v);

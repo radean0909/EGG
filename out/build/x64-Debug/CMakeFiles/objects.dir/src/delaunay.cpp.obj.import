@@ -1,0 +1,18 @@
+[remap]
+
+importer="wavefront_obj"
+type="Mesh"
+path="res://.import/delaunay.cpp.obj-2ffd038b58a66b025d2d8606a7bb5c29.mesh"
+
+[deps]
+
+files=[ "res://.import/delaunay.cpp.obj-2ffd038b58a66b025d2d8606a7bb5c29.mesh" ]
+
+source_file="res://src/lib/FantasyMapGenerator/out/build/x64-Debug/CMakeFiles/objects.dir/src/delaunay.cpp.obj"
+dest_files=[ "res://.import/delaunay.cpp.obj-2ffd038b58a66b025d2d8606a7bb5c29.mesh", "res://.import/delaunay.cpp.obj-2ffd038b58a66b025d2d8606a7bb5c29.mesh" ]
+
+[params]
+
+generate_tangents=true
+scale_mesh=Vector3( 1, 1, 1 )
+optimize_mesh=true

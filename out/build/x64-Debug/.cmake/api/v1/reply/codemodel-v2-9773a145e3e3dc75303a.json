@@ -1,0 +1,78 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.8.9"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "Release",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "map_generation",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "map_generation::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-map_generation-Release-771ee9c0683dd9b2928f.json",
+					"name" : "map_generation",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "mapgen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-mapgen-Release-2e83cc9aa04387a0a9a8.json",
+					"name" : "mapgen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "objects::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-objects-Release-66fdc173cac26eb0b7b0.json",
+					"name" : "objects",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "C:/Users/radea/Documents/MapGen/src/lib/FantasyMapGenerator/out/build/x64-Debug",
+		"source" : "C:/Users/radea/Documents/MapGen/src/lib/FantasyMapGenerator"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 0
+	}
+}

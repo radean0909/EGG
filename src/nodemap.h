@@ -3,6 +3,8 @@
 
 #include "vertexmap.h"
 #include "dcel.h"
+#include "cereal/cereal.hpp"
+#include "cereal/types/vector.hpp"
 
 namespace gen {
 
@@ -11,11 +13,11 @@ class NodeMap {
 
 public:
     NodeMap() {}
-    NodeMap(VertexMap *vertexMap) : _vertexMap(vertexMap) {
+    NodeMap(std::shared_ptr<VertexMap> vertexMap) : _vertexMap(vertexMap) {
         _initializeNodes();
     }
 
-    NodeMap(VertexMap *vertexMap, T fillval) : _vertexMap(vertexMap) {
+    NodeMap(std::shared_ptr<VertexMap> vertexMap, T fillval) : _vertexMap(vertexMap) {
         _initializeNodes();
         fill(fillval);
     }
@@ -24,7 +26,7 @@ public:
         return _vertexMap->size();
     }
 
-    T min() {
+    T getMin() {
         T minval = _nodes[0];
         for (unsigned int i = 0; i < _nodes.size(); i++) {
             if (_nodes[i] < minval) {
@@ -34,7 +36,7 @@ public:
         return minval;
     }
 
-    T max() {
+    T getMax() {
         T maxval = _nodes[0];
         for (unsigned int i = 0; i < _nodes.size(); i++) {
             if (_nodes[i] > maxval) {
@@ -233,6 +235,11 @@ public:
 
         setLevel(median);
     }
+
+    template <class Archive>
+	inline void serialize(Archive & archive) {
+		archive(_nodes, _vertexMap);
+	}
     
 private:
     void _initializeNodes() {
@@ -243,7 +250,7 @@ private:
         return idx >= 0 && idx < (int)_nodes.size();
     }
 
-    VertexMap *_vertexMap;
+    std::shared_ptr<VertexMap> _vertexMap;
     std::vector<T> _nodes;
 };
 

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.9)
 
 project(map_generation)
 set(CMAKE_BUILD_TYPE Release)
-
+include(GNUInstallDirs)
 if (MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /O2 /W4 /D_CRT_SECURE_NO_WARNINGS")
 else()
@@ -29,15 +29,15 @@ else()
 	message(WARNING "Warning: Python was not detected on target machine. Python and the Pycairo graphics library are required for map drawing.\nProject will be built without drawing capabilities.")
 endif()
 
-include_directories(src ${PYTHON_INCLUDE_DIRS})
+include_directories(src ${PYTHON_INCLUDE_DIRS} include)
 file(GLOB SOURCES "src/*.cpp" "src/argtable3/*.c")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
 
 add_library(objects OBJECT ${SOURCES})
-add_executable(map_generation $<TARGET_OBJECTS:objects>)
-target_link_libraries(map_generation ${PYTHON_LIBRARIES})
+add_executable(map_generation $<TARGET_OBJECTS:objects>) 
+target_link_libraries(map_generation ${PYTHON_LIBRARIES}) 
 
 file(COPY "src/fontdata" DESTINATION ${CMAKE_BINARY_DIR})
 file(COPY "src/citydata" DESTINATION ${CMAKE_BINARY_DIR})
